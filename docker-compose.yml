@@ -1,0 +1,23 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6379:6379"   # database
+      - "3000:3000"   # FalkorDB browser UI
+    volumes:
+      - falkordb-data:/var/lib/falkordb/data
+
+  app:
+    build: .
+    depends_on: [falkordb]
+    ports:
+      - "8501:8501"
+    environment:
+      FALKORDB_HOST: falkordb
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    command: >
+      sh -c "python cli.py seed && python cli.py run > /dev/null &&
+             streamlit run app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true"
+
+volumes:
+  falkordb-data:
