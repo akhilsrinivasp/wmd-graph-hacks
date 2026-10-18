@@ -6,6 +6,8 @@ Built for [Graph Hacks: Context for AI Agents](https://www.wemakedevs.org/hackat
 
 **Tracks entered:** Agents That Act on Connected Data · Agent Memory and Coordination
 
+**Demo video:** _add link before submitting_ · **Deployment:** runs locally (FalkorDB in Docker + Streamlit); full setup below.
+
 > ⚠️ **Demo only — not for clinical use.** The pharmacology data is simplified, every patient is synthetic, and every formulation must be checked by a licensed pharmacist.
 
 **Sample reports** (full output of the agents for each demo order: formulation, insurance coverage, message to the prescriber, PA request, compounding procedure, safety findings, evidence graph, agent trace). PDFs open directly on GitHub; the HTML files are single self-contained pages.
@@ -274,9 +276,26 @@ tests/                 end-to-end tests against FalkorDB
 - Compounding procedures are templates per dosage form, not validated master formulation records.
 - No renal dose adjustment by creatinine clearance, no drug-strength matching for commercial products, and no compounding worksheets yet.
 
+## Hackathon rules checklist
+
+| Requirement (official rules) | Where |
+|---|---|
+| FalkorDB is the primary database and does real work | Every agent decision is a Cypher query: [`compounder/queries.py`](compounder/queries.py), [Why FalkorDB](docs/WHY_FALKORDB.md) |
+| Public source-code repository | This repo |
+| README with setup instructions and graph data model | [Setup](#setup), [Graph data model](#graph-data-model) |
+| Cypher queries the product depends on | [The Cypher the product depends on](#the-cypher-the-product-depends-on), [`compounder/queries.py`](compounder/queries.py) |
+| Demo video | Link at the top of this README |
+| Live deployment or complete local setup | Local setup: [Setup](#setup) |
+| Tracks entered | Agents That Act on Connected Data; Agent Memory and Coordination |
+| Allowed data only | openFDA labels and FDA/CMS/USP documents (public); patients, prescribers and insurance plans are synthetic |
+| Work done during the hackathon | All commits are dated from Oct 17, 2026 (event: Oct 15–18) |
+| AI coding assistants disclosed | Below |
+
 ## AI assistance disclosure
 
-Per the hackathon rules: this project was built with **Claude Code**, an AI coding assistant. The team came up with the idea (agents for compounding pharmacies) and set the scope. Claude Code researched the US compounding rules, proposed the graph model and agent design, and wrote most of the first version of the code and tests. The team reviews, tests and changes the code, and can explain the graph model, the queries and the decisions above. The app itself optionally calls the Claude API at runtime, as described above.
+Per the hackathon rules, we disclose that we used **Claude Code** as an AI coding assistant.
+
+The team chose the problem (compounding pharmacies), defined the scope, and drove the product direction across iterations: structured patient intake, step-by-step compounding procedures, the insurance angle (plans covering one dosage form but denying another, and bridging doctor, pharmacist and insurer), shareable reports, and the rules review. Claude Code was used for research on US compounding regulations and to implement the code and tests under the team's direction. The team reviewed and tested the output and can explain the graph model, the queries and the design decisions. The app also optionally calls the Claude API at runtime for language tasks, as described above.
 
 ## License
 
