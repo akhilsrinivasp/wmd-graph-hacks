@@ -150,6 +150,10 @@ def render_order(order_id: str):
         f"<span style='color:{c}'>■</span> <small>{'Excluded base' if k == 'Excluded' else k}</small>"
         for k, c in COLORS.items()), unsafe_allow_html=True)
 
+    from compounder.export import html_report
+    st.download_button("Download full report (HTML, printable to PDF)", html_report(order_id),
+                       file_name=f"compounder-{order_id}.html", mime="text/html", key=f"dl_{order_id}")
+
     if llm.available() and st.button("Ask Claude for a pharmacist brief", key=f"brief_{order_id}"):
         with st.spinner("Claude is reading the agents' findings..."):
             try:

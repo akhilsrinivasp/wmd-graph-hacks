@@ -8,7 +8,17 @@ Built for [Graph Hacks: Context for AI Agents](https://www.wemakedevs.org/hackat
 
 > ⚠️ **Demo only — not for clinical use.** The pharmacology data is simplified, every patient is synthetic, and every formulation must be checked by a licensed pharmacist.
 
-![Evidence graph for one order](docs/evidence-graph.png)
+**Sample reports** (full output of the agents for each demo order: formulation, insurance coverage, message to the prescriber, PA request, compounding procedure, safety findings, evidence graph, agent trace). PDFs open directly on GitHub; the HTML files are single self-contained pages.
+
+| Patient | Case | Report |
+|---|---|---|
+| Maya, 4 y | Amlodipine liquid; plan denies the solution, covers the suspension | [PDF](docs/samples/maya-chen-amlodipine.pdf) · [HTML](docs/samples/maya-chen-amlodipine.html) |
+| Daniel, 55 y | Ketoprofen topical; soy allergy rules out PLO; covered diclofenac alternative | [PDF](docs/samples/daniel-okoro-ketoprofen.pdf) · [HTML](docs/samples/daniel-okoro-ketoprofen.html) |
+| Ethan, 45 y | Levothyroxine; dye, lactose and gelatin free; PA request | [PDF](docs/samples/ethan-brooks-levothyroxine.pdf) · [HTML](docs/samples/ethan-brooks-levothyroxine.html) |
+| Aisha, 7 y | Gabapentin; fructose intolerance rules out sugar vehicles | [PDF](docs/samples/aisha-rahman-gabapentin.pdf) · [HTML](docs/samples/aisha-rahman-gabapentin.html) |
+| Robert, 68 y | Sildenafil blocked with his nitrate | [PDF](docs/samples/robert-hale-sildenafil.pdf) · [HTML](docs/samples/robert-hale-sildenafil.html) |
+| Sofia, 6 y | Metronidazole overdose blocked (75 mg/kg/day) | [PDF](docs/samples/sofia-alvarez-metronidazole.pdf) · [HTML](docs/samples/sofia-alvarez-metronidazole.html) |
+| Leo, 9 mo | Omeprazole suspension; compounding is the cheapest covered option | [PDF](docs/samples/leo-martins-omeprazole.pdf) · [HTML](docs/samples/leo-martins-omeprazole.html) |
 
 📄 **Read more:** [How compounding works today and where we help](docs/RESEARCH.md) · [Why FalkorDB fits this problem](docs/WHY_FALKORDB.md)
 
@@ -215,6 +225,7 @@ docker run -d -p 6379:6379 -p 3000:3000 falkordb/falkordb:latest
 pip install -r requirements.txt
 python cli.py seed      # load knowledge base, openFDA products, demo patients and orders
 python cli.py run       # run every pending order through the agents (prints results)
+python cli.py export    # HTML + PDF report per order in docs/samples/ (PDF needs: pip install playwright)
 streamlit run app.py    # pharmacist UI
 pytest                  # end-to-end tests (needs FalkorDB running)
 ```

@@ -3,6 +3,7 @@
   python cli.py seed        reset the graph and load knowledge + demo orders
   python cli.py run         run every pending order through the agents
   python cli.py show ID     print one order's result
+  python cli.py export      write an HTML + PDF report per order to docs/samples/
 """
 import sys
 
@@ -45,6 +46,10 @@ def main():
         if not results:
             for o in db.run(Q.LIST_ORDERS):
                 show(o["order_id"])
+    elif cmd == "export":
+        from compounder.export import export_all
+        for p in export_all():
+            print(p)
     elif cmd == "show":
         show(sys.argv[2])
     else:

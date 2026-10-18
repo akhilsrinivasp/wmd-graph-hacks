@@ -23,7 +23,7 @@ def _g(x: float) -> str:
 def build(drug_id: str, drug_name: str, base: dict, plan: dict, rx: dict) -> dict:
     form = base["form_id"]
     storage = base.get("storage") or "room temperature"
-    label = [plan["directions"], f"Discard after {plan['days']} days (beyond-use date).",
+    label = [plan["directions"], f"Discard {base['bud_days']} days after the compounding date (beyond-use date).",
              "Compounded medication. Keep out of reach of children."]
 
     if base["liquid"]:
