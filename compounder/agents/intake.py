@@ -1,7 +1,7 @@
 """Intake agent: turns an incoming order into a Prescription in the graph.
 
 E-prescriptions arrive already structured, so the agent only validates them.
-Free-text orders are parsed with Claude (if an API key is set), then the
+Free-text orders are parsed by the LLM (Claude or Gemini, if a key is set), then the
 patient, prescriber and drug names are resolved against the graph.
 """
 from compounder import db, llm
@@ -51,11 +51,11 @@ class IntakeAgent(Agent):
             return {}
         if not llm.available():
             self.finding(order_id, "block", "intake",
-                         "Free-text order needs ANTHROPIC_API_KEY to be parsed. Enter it as a structured prescription instead.")
+                         "Free-text order needs ANTHROPIC_API_KEY or GEMINI_API_KEY to be parsed. Enter it as a structured prescription instead.")
             return {}
 
         parsed = llm.parse_order(text)
-        self.log(order_id, "parse_free_text", f"Claude extracted: {parsed.model_dump_json()}")
+        self.log(order_id, "parse_free_text", f"{llm.provider_label()} extracted: {parsed.model_dump_json()}")
 
         patient = db.run(Q.FIND_PATIENT, {"name": parsed.patient_name or ""})
         drug = db.run(Q.FIND_DRUG, {"name": parsed.drug_name or ""})

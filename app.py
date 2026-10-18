@@ -55,7 +55,8 @@ with st.sidebar:
         st.toast(f"Processed {len(done)} order(s)")
         st.rerun()
     st.divider()
-    st.caption("Claude: " + ("connected" if llm.available() else "not configured (set ANTHROPIC_API_KEY to parse free-text orders)"))
+    st.caption("LLM: " + (llm.provider_label() if llm.available()
+                          else "not configured (set ANTHROPIC_API_KEY or GEMINI_API_KEY for free-text orders)"))
     st.caption("Graph browser: [localhost:3000](http://localhost:3000)")
     st.caption("⚠️ Demo only. Not for clinical use. All patients are synthetic.")
 
@@ -155,8 +156,8 @@ def render_order(order_id: str):
     st.download_button("Download full report (HTML, printable to PDF)", html_report(order_id),
                        file_name=f"compounder-{order_id}.html", mime="text/html", key=f"dl_{order_id}")
 
-    if llm.available() and st.button("Ask Claude for a pharmacist brief", key=f"brief_{order_id}"):
-        with st.spinner("Claude is reading the agents' findings..."):
+    if llm.available() and st.button("Ask the LLM for a pharmacist brief", key=f"brief_{order_id}"):
+        with st.spinner("The LLM is reading the agents' findings..."):
             try:
                 brief = llm.summarize({k: rep[k] for k in ("patient", "drug", "rx", "formulation", "findings")})
                 st.info(brief.summary + "\n\n" + "\n".join(f"- {a}" for a in brief.action_items))
@@ -326,20 +327,20 @@ with tab_new:
                 process(oid)
                 st.success(f"Order {oid} processed. Open it in the Pharmacist queue.")
 
-    st.markdown("#### Free-text order (parsed by Claude)")
+    st.markdown("#### Free-text order (parsed by the LLM: Claude or Gemini)")
     text = st.text_area("Paste an order", value=demo_patients.FREE_TEXT_EXAMPLE, height=100)
     if st.button("Parse and run agents", disabled=not llm.available()):
         oid = f"ord_{uuid.uuid4().hex[:8]}"
         db.run("CREATE (:Order {id: $id, status: 'RECEIVED', source: 'free text', raw_text: $t, created_at: $ts})",
                {"id": oid, "t": text, "ts": int(time.time())})
-        with st.spinner("Claude is reading the order, then the agents take over..."):
+        with st.spinner("The LLM is reading the order, then the agents take over..."):
             try:
                 status = process(oid)
                 st.success(f"Order {oid}: {STATUS_LABEL.get(status, status)}. Open it in the Pharmacist queue.")
             except Exception as e:
                 st.error(str(e))
     if not llm.available():
-        st.caption("Set ANTHROPIC_API_KEY to enable this.")
+        st.caption("Set ANTHROPIC_API_KEY or GEMINI_API_KEY to enable this.")
 
 
 # --------------------------------------------------------------------------- policy GraphRAG
@@ -347,7 +348,7 @@ with tab_rules:
     from compounder import policy
     st.markdown("Regulations and plan rules are buried in long documents. Ask in plain English: FalkorDB full-text "
                 "search finds the policy excerpts, the graph adds every excerpt and live formulary fact linked to "
-                "the drugs and plans you mention, and Claude answers with citations.")
+                "the drugs and plans you mention, and the LLM (Claude or Gemini) answers with citations.")
     examples = ["Why was the amlodipine oral solution claim denied on Acme?",
                 "Does Medicare Part D pay for a compounded ketoprofen cream?",
                 "What beyond-use date applies to capsules without a stability study?",
@@ -364,7 +365,7 @@ with tab_rules:
             st.success(res["answer"].answer)
             st.caption("Sources: " + "; ".join(res["answer"].cited_sources))
         elif not llm.available():
-            st.info("Set ANTHROPIC_API_KEY for a written answer. Retrieved context:")
+            st.info("Set ANTHROPIC_API_KEY or GEMINI_API_KEY for a written answer. Retrieved context:")
         if res["facts"]:
             st.markdown("**Live formulary facts from the graph**")
             st.dataframe(res["facts"], hide_index=True, use_container_width=True)

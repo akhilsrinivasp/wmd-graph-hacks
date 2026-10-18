@@ -61,7 +61,7 @@ A team of agents takes an order from intake to a pharmacist-ready formulation:
 
 **Structured patient intake:** patient data enters as a validated record (allergies with reaction and severity, history, medications, dietary restrictions, insurance, the doctor's prescription), via a form or JSON import (`data/sample_patient.json`). Every name is matched to a graph node, and details are stored on the relationships.
 
-**Ask the rules (GraphRAG):** regulation and plan-rule excerpts are `PolicyChunk` nodes with a FalkorDB full-text index, linked to the drugs, forms and plans they mention. A plain-English question is answered from full-text hits plus graph expansion to linked excerpts and live formulary facts; Claude writes the answer with citations.
+**Ask the rules (GraphRAG):** regulation and plan-rule excerpts are `PolicyChunk` nodes with a FalkorDB full-text index, linked to the drugs, forms and plans they mention. A plain-English question is answered from full-text hits plus graph expansion to linked excerpts and live formulary facts; the LLM (Claude or Gemini) writes the answer with citations.
 
 **Traceability:** every finding stores its evidence path (e.g. `Soy lecithin → Soy-derived`), and the UI draws the evidence graph for each order.
 
@@ -232,7 +232,7 @@ streamlit run app.py    # pharmacist UI
 pytest                  # end-to-end tests (needs FalkorDB running)
 ```
 
-**Optional:** set `ANTHROPIC_API_KEY` to enable free-text order parsing and the "pharmacist brief" button (model: Claude Opus 5.5, override with `COMPOUNDER_MODEL`). Everything else works without it.
+**Optional LLM:** set `ANTHROPIC_API_KEY` (Claude Opus 5.5 by default, override with `COMPOUNDER_MODEL`) **or** `GEMINI_API_KEY` (Gemini, free tier available from Google AI Studio; default `gemini-flash-latest`, override with `GEMINI_MODEL`) to enable free-text order parsing, the pharmacist brief and written policy answers. If both are set, Claude is used unless `COMPOUNDER_LLM=gemini`. Everything else works without a key.
 
 **FalkorDB Cloud:** set `FALKORDB_URL=redis://USER:PASSWORD@HOST:PORT` (see `.env.example`).
 
@@ -254,7 +254,7 @@ compounder/
   policy.py            GraphRAG over policy excerpts
   seed/insurance.py    synthetic plans and formularies
   seed/policies.py     regulation / plan-rule excerpts
-  llm.py               Claude: free-text parsing, pharmacist brief, policy answers
+  llm.py               LLM (Claude or Gemini): free-text parsing, pharmacist brief, policy answers
   viz.py               evidence graph (Graphviz)
 app.py                 Streamlit pharmacist UI
 cli.py                 command-line demo
@@ -263,7 +263,7 @@ tests/                 end-to-end tests against FalkorDB
 
 ## Design decisions
 
-- **The model does not make clinical decisions.** Base choice, dose checks and interactions are deterministic graph queries, so every decision can be traced and tested. Claude is used where language is the problem: reading messy free-text orders and summarising findings for the pharmacist.
+- **The model does not make clinical decisions.** Base choice, dose checks and interactions are deterministic graph queries, so every decision can be traced and tested. An LLM (Claude or Gemini) is used where language is the problem: reading messy free-text orders, summarising findings for the pharmacist and answering policy questions.
 - **Human in the loop.** Agents propose; a pharmacist approves. That matches how 503A compounding works.
 - **Rules at the right level of abstraction.** One `CAUTION_IN` edge from `Fructose source` covers sucrose and sorbitol. Adding a new dye to the taxonomy instantly protects every dye-allergic patient.
 - **Real regulatory context.** The commercial-product check uses real FDA label data. 503A pharmacies shouldn't compound copies of commercially available drugs without a documented clinical reason.
@@ -295,7 +295,7 @@ tests/                 end-to-end tests against FalkorDB
 
 Per the hackathon rules, we disclose that we used **Claude Code** as an AI coding assistant.
 
-The team chose the problem (compounding pharmacies), defined the scope, and drove the product direction across iterations: structured patient intake, step-by-step compounding procedures, the insurance angle (plans covering one dosage form but denying another, and bridging doctor, pharmacist and insurer), shareable reports, and the rules review. Claude Code was used for research on US compounding regulations and to implement the code and tests under the team's direction. The team reviewed and tested the output and can explain the graph model, the queries and the design decisions. The app also optionally calls the Claude API at runtime for language tasks, as described above.
+The team chose the problem (compounding pharmacies), defined the scope, and drove the product direction across iterations: structured patient intake, step-by-step compounding procedures, the insurance angle (plans covering one dosage form but denying another, and bridging doctor, pharmacist and insurer), shareable reports, and the rules review. Claude Code was used for research on US compounding regulations and to implement the code and tests under the team's direction. The team reviewed and tested the output and can explain the graph model, the queries and the design decisions. The app also optionally calls an LLM API (Claude or Gemini) at runtime for language tasks, as described above.
 
 ## License
 

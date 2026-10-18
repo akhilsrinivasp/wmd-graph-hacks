@@ -38,7 +38,7 @@ FalkorDB is an in-memory graph database built on sparse matrices (GraphBLAS) and
 
 ## 7. Cypher is auditable logic
 
-All decision logic sits in readable Cypher queries (`compounder/queries.py`). A pharmacist or reviewer can read the exact rule that excluded a base or flagged an interaction. The LLM is used only for language tasks: parsing free-text orders, briefing the pharmacist, answering policy questions with citations. Clinical decisions stay deterministic and testable.
+All decision logic sits in readable Cypher queries (`compounder/queries.py`). A pharmacist or reviewer can read the exact rule that excluded a base or flagged an interaction. The LLM (Claude or Gemini) is used only for language tasks: parsing free-text orders, briefing the pharmacist, answering policy questions with citations. Clinical decisions stay deterministic and testable.
 
 ## If FalkorDB were removed
 
