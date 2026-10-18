@@ -22,4 +22,5 @@ def order_report(order_id: str) -> dict:
         "formulation": props(r["f"]),
         "findings": findings,
         "steps": db.run(Q.ORDER_STEPS, {"order_id": order_id}),
+        "coverage": props((db.run(Q.ORDER_COVERAGE, {"order_id": order_id}) or [{}])[0].get("c")),
     }

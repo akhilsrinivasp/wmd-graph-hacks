@@ -7,7 +7,7 @@ with their reason so the pharmacist can see why they were not chosen.
 """
 import math
 
-from compounder import db
+from compounder import db, procedure
 from compounder import queries as Q
 from compounder.agents.base import Agent, new_id
 
@@ -121,6 +121,7 @@ class FormulationAgent(Agent):
 
         _score, best, _warns = ranked[0]
         plan = self._dosing(rx, best)
+        mfr = procedure.build(drug["id"], drug["name"], best, plan, rx)
         props = {
             "id": new_id("form"),
             "drug": drug["name"], "base": best["base"], "form": best["form"],
@@ -130,6 +131,8 @@ class FormulationAgent(Agent):
             "bud_source": best["reference"], "storage": best["storage"] or "",
             "directions": plan["directions"], "notes": plan["notes"],
             "excluded": excluded,
+            "procedure": mfr["procedure"], "ingredients": mfr["ingredients"], "equipment": mfr["equipment"],
+            "qc": mfr["qc"], "label_text": mfr["label"],
             "alternatives": [f"{c['base']} (score {s:.1f})" for s, c, _ in ranked[1:4]],
         }
         db.run("MATCH (o:Order {id: $id})-[:PROPOSED]->(old:Formulation) DETACH DELETE old", {"id": order_id})

@@ -24,6 +24,11 @@ def show(order_id: str):
         print(f"  -> {f['drug']} {f['concentration']} {f['form'].lower()} in {f['base']}")
         print(f"     {f['dose_text']}; make {f['quantity']} {f['quantity_unit']}; BUD {f['bud_days']} days")
         print(f"     Label: {f['directions']}")
+        for i, step in enumerate(f.get("procedure") or [], 1):
+            print(f"       {i}. {step}")
+    cov = rep.get("coverage")
+    if cov:
+        print(f"  $ {cov['plan']}: {cov['recommended']} ({cov['route']}), copay {cov.get('copay_usd')}, PA {cov['prior_auth']}")
     for fd in rep["findings"]:
         print(f"  {ICON.get(fd['severity'], fd['severity'])} [{fd['category']}] {fd['message']}")
 
