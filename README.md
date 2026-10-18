@@ -1,6 +1,6 @@
 # Compounder
 
-**Graph-powered agents that design patient-specific compounded medicines, built on FalkorDB.**
+**Graph-powered agents that design patient-specific compounded medicines, check them for safety, find the version the patient's insurance actually pays for, and draft the messages to the doctor and insurer. Built on FalkorDB.**
 
 Built for [Graph Hacks: Context for AI Agents](https://www.wemakedevs.org/hackathons/falkordb) (WeMakeDevs × FalkorDB).
 
@@ -9,6 +9,8 @@ Built for [Graph Hacks: Context for AI Agents](https://www.wemakedevs.org/hackat
 > ⚠️ **Demo only — not for clinical use.** The pharmacology data is simplified, every patient is synthetic, and every formulation must be checked by a licensed pharmacist.
 
 ![Evidence graph for one order](docs/evidence-graph.png)
+
+📄 **Read more:** [How compounding works today and where we help](docs/RESEARCH.md) · [Why FalkorDB fits this problem](docs/WHY_FALKORDB.md)
 
 ## The problem
 
@@ -22,6 +24,8 @@ To fill one order, a pharmacist has to connect a lot of facts:
 - drug interactions, weight-based dose limits
 - whether a commercial product would already do the job, which matters for 503A
 
+- and **insurance**: plans set coverage per drug *and* dosage form. A doctor writes "amlodipine"; the plan denies the oral solution but would have paid for the suspension. The claim bounces, and patient, doctor and pharmacist all lose days. Doctors can't know every brand, form and formulary rule; pharmacists do. Physicians already handle about 39 prior authorizations a week, spending 13 hours on them ([AMA](https://www.ama-assn.org/practice-management/prior-authorization/fixing-prior-auth-nearly-40-prior-authorizations-week-way)).
+
 That is a graph problem, so we modelled it as one.
 
 ## What it does
@@ -34,15 +38,24 @@ A team of agents takes an order from intake to a pharmacist-ready formulation:
 | **History** | Loads the patient's context, **writes derived facts back** (e.g. `Young child (< 6 years)`), and recalls memory from earlier orders. |
 | **Formulation** | Finds bases the drug is stable in, keeps the dosage forms the patient's conditions call for, excludes bases whose ingredients conflict with the patient (via multi-hop `IS_A` paths), ranks the rest, then computes the strength, dose volume, quantity, beyond-use date and label directions. |
 | **Safety** | Independently checks drug allergy and cross-reactivity, drug–drug and drug–condition interactions, the weight-based dose, the chosen base again, and whether a suitable commercial product exists (from **1,000 real FDA labels via openFDA**). |
+| **Coverage** | Walks patient → plan → formulary entry (drug + dosage form) ← commercial products → ingredients ← patient allergies. Ranks the safe options by prior auth and copay, suggests covered therapeutic alternatives, and drafts a **ready-to-send message to the prescriber** and a **prior-authorization request** that lists why each covered product is unsuitable. |
 | **Pharmacist** (human) | Reviews the formulation, findings, evidence graph and agent trace, then approves or rejects. Blocking findings need a documented override. |
 
-**Coordination:** agents never call each other. Each agent picks up an `Order` in the status it owns, writes its results and an `AgentStep` trace (linked to the nodes it used), and moves the order on: `RECEIVED → INTAKE_DONE → CONTEXT_READY → FORMULATED → AWAITING_REVIEW`. The graph is the shared blackboard, so any step can be re-run or resumed.
+**Coordination:** agents never call each other. Each agent picks up an `Order` in the status it owns, writes its results and an `AgentStep` trace (linked to the nodes it used), and moves the order on: `RECEIVED → INTAKE_DONE → CONTEXT_READY → FORMULATED → SAFETY_CHECKED → AWAITING_REVIEW`. The graph is the shared blackboard, so any step can be re-run or resumed.
 
 **Memory:** approving an order adds `(Patient)-[:TOLERATED]->(Base)`. Reporting a reaction adds `(Patient)-[:HAD_REACTION]->(Excipient)` and removes that tolerance. On the next order, the Formulation agent prefers tolerated bases and treats past reactions like allergies. A test covers this: after a reported methylparaben rash, the patient's next order moves to a paraben-free base.
 
+**Compounding procedure:** each formulation comes with a master-formulation-record-style procedure: ingredients with computed amounts (e.g. "10 × amlodipine 5 mg tablets"), equipment, numbered steps, quality checks and label text.
+
+**Structured patient intake:** patient data enters as a validated record (allergies with reaction and severity, history, medications, dietary restrictions, insurance, the doctor's prescription), via a form or JSON import (`data/sample_patient.json`). Every name is matched to a graph node, and details are stored on the relationships.
+
+**Ask the rules (GraphRAG):** regulation and plan-rule excerpts are `PolicyChunk` nodes with a FalkorDB full-text index, linked to the drugs, forms and plans they mention. A plain-English question is answered from full-text hits plus graph expansion to linked excerpts and live formulary facts; Claude writes the answer with citations.
+
 **Traceability:** every finding stores its evidence path (e.g. `Soy lecithin → Soy-derived`), and the UI draws the evidence graph for each order.
 
-### Demo cases (all synthetic)
+### Demo cases (all synthetic, insurance plans included)
+
+Coverage results: **Maya** (Acme PPO): the oral solution is denied, Katerzia suspension is covered at $15 with no PA, and a message asks the doctor to specify the suspension. **Daniel** (Part D): ketoprofen compound needs PA at $47, so the agent suggests covered diclofenac 1% gel at $9. **Ethan** (Acme PPO): every covered tablet contains dyes, so a compound PA request is drafted citing them. **Leo** (Medicaid): compounding is the cheapest covered option ($1, no PA).
 
 | Patient | Order | What the graph catches |
 |---|---|---|
@@ -91,6 +104,14 @@ graph LR
   Order -- HAS_STEP --> AgentStep
   AgentStep -- USED --> Patient
   Order -- REVIEWED --> Review
+  Patient -- INSURED_BY --> InsurancePlan
+  InsurancePlan -- LISTS --> FormularyEntry
+  FormularyEntry -- FOR_DRUG --> Drug
+  FormularyEntry -- IN_FORM --> DosageForm
+  Drug -- ALTERNATIVE_TO --> Drug
+  Order -- COVERAGE --> CoverageDecision
+  CoverageDecision -- UNDER_PLAN --> InsurancePlan
+  PolicyChunk -- MENTIONS --> InsurancePlan
 ```
 
 Notes:
@@ -102,6 +123,8 @@ Notes:
 |---|---|---|
 | Pharmacology knowledge | 24 drugs, 22 classes, 44 excipients, 17 excipient groups, 12 bases, 7 dosage forms, 27 dose rules, 25 conditions | Curated in `compounder/seed/knowledge.py` (simplified from public references and published compounding stability studies) |
 | Commercial products | 1,000 FDA drug labels with detected inactive ingredients | [openFDA drug label API](https://open.fda.gov/apis/drug/label/), cached in `data/openfda_products.json` |
+| Insurance plans and formularies | 3 plans, 21 formulary entries (drug + form), compound policies, therapeutic alternatives | **Synthetic**, modelled on common real formulary patterns (`compounder/seed/insurance.py`) |
+| Regulation and plan-rule excerpts | 12 policy chunks with source links, full-text indexed | Paraphrased from FDA (503A/503B), USP <795>, CMS Part D manual; plan rules synthetic (`compounder/seed/policies.py`) |
 | Patients, prescribers, prescriptions | 7 / 3 / 7 | Synthetic (`compounder/seed/demo_patients.py`) |
 | Orders, formulations, findings, agent steps, reviews | created at runtime | Written by the agents |
 
@@ -144,6 +167,27 @@ RETURN b.id AS base_id, b.name AS base, f.id AS form_id, f.name AS form, f.liqui
        s.bud_days IS NOT NULL AS has_study, s.storage AS storage, s.reference AS reference
 ```
 
+**Insurance: what does the patient's plan pay for, per drug and dosage form?**
+```cypher
+MATCH (:Patient {id: $patient_id})-[:INSURED_BY]->(pl:InsurancePlan)-[:LISTS]->(fe:FormularyEntry)-[:FOR_DRUG]->(d:Drug)
+WHERE d.id IN $drug_ids
+MATCH (fe)-[:IN_FORM]->(f:DosageForm)
+WHERE f.id IN $form_ids
+RETURN d.id AS drug_id, d.name AS drug, f.id AS form_id, f.name AS form, fe.status AS status,
+       fe.tier AS tier, fe.copay_usd AS copay, fe.prior_auth AS prior_auth, fe.note AS note
+```
+The Coverage agent joins this with the commercial products in each form and runs the ingredient-conflict query on them, so a "covered" form only counts if a product in it is safe for this patient.
+
+**Policy GraphRAG: full-text search, then expand through the graph**
+```cypher
+CALL db.idx.fulltext.queryNodes('PolicyChunk', $q) YIELD node, score
+RETURN node.id AS id, node.source AS source, node.text AS text, score ORDER BY score DESC LIMIT $k
+```
+```cypher
+MATCH (c:PolicyChunk)-[:MENTIONS]->(n) WHERE n.id IN $ids
+RETURN DISTINCT c.id AS id, c.source AS source, c.url AS url, c.text AS text
+```
+
 **Memory: approval teaches the graph**
 ```cypher
 MATCH (o:Order {id: $order_id})-[:FILLS]->(:Prescription)-[:FOR_PATIENT]->(p:Patient)
@@ -153,7 +197,7 @@ MERGE (p)-[:TOLERATED]->(b)
 CREATE (o)-[:REVIEWED]->(:Review {id: $id, decision: 'approved', by: $by, note: $note, at: $at})
 ```
 
-Remove FalkorDB and nothing works: candidate selection, every safety check, the commercial-product check, agent coordination and memory are all graph queries.
+Remove FalkorDB and nothing works: candidate selection, every safety check, the commercial-product check, coverage ranking, policy retrieval, agent coordination and memory are all graph queries. More in [docs/WHY_FALKORDB.md](docs/WHY_FALKORDB.md).
 
 ## Setup
 
@@ -191,7 +235,13 @@ compounder/
   seed/openfda.py      openFDA label importer (inactive ingredients)
   seed/demo_patients.py synthetic patients and prescriptions
   seed/loader.py       writes everything into FalkorDB
-  llm.py               Claude: free-text parsing + pharmacist brief
+  agents/coverage.py   insurance coverage, prescriber message, PA request
+  procedure.py         step-by-step compounding procedure
+  intake_schema.py     structured patient record (Pydantic) + import
+  policy.py            GraphRAG over policy excerpts
+  seed/insurance.py    synthetic plans and formularies
+  seed/policies.py     regulation / plan-rule excerpts
+  llm.py               Claude: free-text parsing, pharmacist brief, policy answers
   viz.py               evidence graph (Graphviz)
 app.py                 Streamlit pharmacist UI
 cli.py                 command-line demo
@@ -209,6 +259,8 @@ tests/                 end-to-end tests against FalkorDB
 
 - The knowledge base is small and simplified. Dose ranges and stability data are illustrative and not verified for clinical use.
 - openFDA inactive-ingredient lists often cover all strengths of a product together, so the commercial check is conservative.
+- Insurance plans are synthetic. Production use needs real formulary feeds (e.g. CMS Part D formulary files, PBM data) and real PA submission (e.g. ePA).
+- Compounding procedures are templates per dosage form, not validated master formulation records.
 - No renal dose adjustment by creatinine clearance, no drug-strength matching for commercial products, and no compounding worksheets yet.
 
 ## AI assistance disclosure
