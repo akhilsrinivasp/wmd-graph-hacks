@@ -69,7 +69,12 @@ def html_report(order_id: str) -> str:
                 "No report is available.</p></body></html>")
     prof = db.run(Q.PATIENT_PROFILE, {"patient_id": p["id"]})[0]
     conditions = [c["name"] for c in prof["conditions"] if c.get("name")]
-    dose = f"{rx.get('dose_mg'):g} mg" if rx.get("dose_mg") is not None else f"{rx.get('concentration_pct'):g}%"
+    if rx.get("dose_mg") is not None:
+        dose = f"{rx['dose_mg']:g} mg"
+    elif rx.get("concentration_pct") is not None:
+        dose = f"{rx['concentration_pct']:g}%"
+    else:
+        dose = "strength missing"
     out = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
            f"<meta name='viewport' content='width=device-width, initial-scale=1'>"
            f"<title>{_e(d.get('name'))} for {_e(p.get('name'))} · Compounder</title><style>{CSS}</style></head><body><main>"]

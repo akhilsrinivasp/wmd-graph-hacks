@@ -49,7 +49,7 @@ A team of agents takes an order from intake to a pharmacist-ready formulation:
 | **Intake** | Validates an e-prescription. Free-text orders are parsed by Claude into a structured `Prescription`, and names are resolved against graph nodes. |
 | **History** | Loads the patient's context, **writes derived facts back** (e.g. `Young child (< 6 years)`), and recalls memory from earlier orders. |
 | **Formulation** | Finds bases the drug is stable in, keeps the dosage forms the patient's conditions call for, excludes bases whose ingredients conflict with the patient (via multi-hop `IS_A` paths), ranks the rest, then computes the strength, dose volume, quantity, beyond-use date and label directions. |
-| **Safety** | Independently checks drug allergy and cross-reactivity, drug–drug and drug–condition interactions, the weight-based dose, the chosen base again, and whether a suitable commercial product exists (from **1,000 real FDA labels via openFDA**). |
+| **Safety** | Independently checks drug allergy and cross-reactivity, drug–drug and drug–condition interactions, the weight-based dose, the chosen base again, and whether a suitable commercial product exists (from **957 real FDA labels via openFDA**). |
 | **Coverage** | Walks patient → plan → formulary entry (drug + dosage form) ← commercial products → ingredients ← patient allergies. Ranks the safe options by prior auth and copay, suggests covered therapeutic alternatives, and drafts a **ready-to-send message to the prescriber** and a **prior-authorization request** that lists why each covered product is unsuitable. |
 | **Pharmacist** (human) | Reviews the formulation, findings, evidence graph and agent trace, then approves or rejects. Blocking findings need a documented override. |
 
@@ -134,7 +134,7 @@ Notes:
 | Layer | Nodes | Source |
 |---|---|---|
 | Pharmacology knowledge | 24 drugs, 22 classes, 44 excipients, 17 excipient groups, 12 bases, 7 dosage forms, 27 dose rules, 25 conditions | Curated in `compounder/seed/knowledge.py` (simplified from public references and published compounding stability studies) |
-| Commercial products | 1,000 FDA drug labels with detected inactive ingredients | [openFDA drug label API](https://open.fda.gov/apis/drug/label/), cached in `data/openfda_products.json` |
+| Commercial products | 957 FDA drug labels with detected inactive ingredients (route-checked against the dosage form) | [openFDA drug label API](https://open.fda.gov/apis/drug/label/), cached in `data/openfda_products.json` |
 | Insurance plans and formularies | 3 plans, 21 formulary entries (drug + form), compound policies, therapeutic alternatives | **Synthetic**, modelled on common real formulary patterns (`compounder/seed/insurance.py`) |
 | Regulation and plan-rule excerpts | 12 policy chunks with source links, full-text indexed | Paraphrased from FDA (503A/503B), USP <795>, CMS Part D manual; plan rules synthetic (`compounder/seed/policies.py`) |
 | Patients, prescribers, prescriptions | 7 / 3 / 7 | Synthetic (`compounder/seed/demo_patients.py`) |

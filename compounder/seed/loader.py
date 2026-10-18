@@ -88,16 +88,22 @@ def load_knowledge():
 
 def load_products():
     snapshot = load_snapshot()
+    form_route = {f[0]: f[2] for f in kb.DOSAGE_FORMS}
+    # Label routes accepted for each dosage-form route; rectal, vaginal,
+    # sublingual, injectable etc. products are not interchangeable.
+    compatible = {"oral": {"oral"}, "topical": {"topical", "transdermal", "cutaneous"}}
     rows = []
     for drug_id, products in snapshot.items():
         for p in products:
+            if p.get("route", "") not in compatible.get(form_route.get(p["form"], ""), set()):
+                continue
             rows.append({"id": f"prod_{p['id']}_{drug_id}", "drug": drug_id, "form": p["form"],
-                         "brand": p["brand"], "manufacturer": p["manufacturer"],
+                         "brand": p["brand"], "manufacturer": p["manufacturer"], "route": p["route"],
                          "source": p["source"], "excipients": p["excipients"]})
     db.run(
         """UNWIND $rows AS r
         MATCH (d:Drug {id: r.drug}) MATCH (f:DosageForm {id: r.form})
-        CREATE (p:Product {id: r.id, brand: r.brand, manufacturer: r.manufacturer, source: r.source})
+        CREATE (p:Product {id: r.id, brand: r.brand, manufacturer: r.manufacturer, route: r.route, source: r.source})
         CREATE (p)-[:OF_DRUG]->(d) CREATE (p)-[:IN_FORM]->(f)
         WITH p, r UNWIND r.excipients AS ex
         MATCH (e:Excipient {id: ex}) CREATE (p)-[:CONTAINS]->(e)""",

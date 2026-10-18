@@ -164,3 +164,29 @@ def test_review_fixes():
     # Restart clears a stale formulation when the only base becomes unusable
     db.run(Q.REPORT_REACTION, {"patient_id": "pt_leo", "excipient_id": "sodium_bicarbonate", "note": "", "at": 0})
     assert not run_rx("rx_1002")["formulation"]
+
+
+def test_second_review_fixes():
+    from compounder.export import html_report
+    from compounder.seed.loader import add_prescription, create_order
+    # Report renders for a resolved order that failed intake (no dose)
+    add_prescription({"id": "rx_nodose2", "patient": "pt_maya", "prescriber": "dr_okafor", "drug": "amlodipine",
+                      "route": "oral", "frequency_per_day": 1, "duration_days": 30})
+    oid = create_order("rx_nodose2")
+    assert process(oid) == "NEEDS_ATTENTION"
+    assert "strength missing" in html_report(oid)
+    # Absolute maximum still blocks when the per-kg dose is below range (17 y, 80 kg, omeprazole 50 mg/day)
+    from compounder.seed.loader import add_patient
+    add_patient({"id": "pt_teen", "name": "Teen Test", "age_years": 17, "weight_kg": 80})
+    add_prescription({"id": "rx_teen", "patient": "pt_teen", "prescriber": "dr_okafor", "drug": "omeprazole",
+                      "route": "oral", "dose_mg": 50, "frequency_per_day": 1, "duration_days": 30})
+    oid = create_order("rx_teen")
+    process(oid)
+    rep = order_report(oid)
+    assert any("exceeds the maximum of 40 mg/day" in m for m in messages(rep, "block"))
+    assert any("below the usual pediatric range" in m for m in messages(rep, "warn"))
+    # Products whose label route doesn't match the dosage form are not loaded
+    bad = db.run("MATCH (p:Product) WHERE NOT p.route IN ['oral', 'topical', 'transdermal', 'cutaneous'] "
+                 "RETURN count(p) AS n")[0]["n"]
+    assert bad == 0
+    assert db.run("MATCH (p:Product {brand: 'Accucaine'}) RETURN count(p) AS n")[0]["n"] == 0

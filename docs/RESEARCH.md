@@ -41,7 +41,7 @@ A typical order goes like this:
 | Step | Today | With Compounder |
 |---|---|---|
 | Patient context | Scattered profile, calls | Structured record in the graph (allergies with reaction and severity, history, meds, insurance, prescription), validated on entry |
-| Commercial product check | Read labels one by one | 1,000 FDA labels in the graph, inactive ingredients checked against the patient in one query |
+| Commercial product check | Read labels one by one | 957 FDA labels in the graph, inactive ingredients checked against the patient in one query |
 | Formulation design | Literature + base sheets + manual cross-check | Agents pick base, strength, beyond-use date and quantity; excluded bases show the exact ingredient path that ruled them out |
 | Procedure | Written by hand | Step-by-step procedure with computed quantities, quality checks and label text |
 | Safety | Separate tools | Allergy, cross-reactivity, interactions, dose per kg, ingredient checks; every finding carries evidence |

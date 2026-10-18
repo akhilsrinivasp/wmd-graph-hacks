@@ -70,7 +70,8 @@ def render_order(order_id: str):
     blockers = [x for x in rep["findings"] if x["severity"] == "block"]
 
     st.subheader(f"{d.get('name')} for {p.get('name')}")
-    dose = f"{rx.get('dose_mg')} mg" if rx.get("dose_mg") is not None else f"{rx.get('concentration_pct')}%"
+    dose = (f"{rx['dose_mg']:g} mg" if rx.get("dose_mg") is not None
+            else f"{rx['concentration_pct']:g}%" if rx.get("concentration_pct") is not None else "strength missing")
     st.caption(f"Order {order_id} · {STATUS_LABEL.get(rep['order']['status'], rep['order']['status'])} · "
                f"Rx {dose}, {rx.get('frequency_per_day')}×/day for {rx.get('duration_days')} days ({rx.get('route')}) · "
                f"{doc.get('name', '')} · Patient {p.get('age_years')} y, {p.get('weight_kg')} kg")

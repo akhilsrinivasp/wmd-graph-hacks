@@ -83,25 +83,26 @@ class SafetyAgent(Agent):
         daily = rx["dose_mg"] * int(rx.get("frequency_per_day") or 1)
         weight = patient.get("weight_kg")
         evidence = [f"{rx['dose_mg']} mg × {rx.get('frequency_per_day')}/day = {daily:g} mg/day"]
+        blocks, warns = [], []
         if weight and rule.get("mg_per_kg_day_max") is not None:
             per_kg = daily / weight
             evidence.append(f"{daily:g} mg ÷ {weight:g} kg = {per_kg:.2f} mg/kg/day")
             lo, hi = rule.get("mg_per_kg_day_min"), rule["mg_per_kg_day_max"]
             if per_kg > hi:
-                add("block", "dose", f"Dose is {per_kg:.1f} mg/kg/day, above the {population} maximum of {hi:g} "
-                    f"mg/kg/day. Contact the prescriber.", evidence)
-                return
-            if lo is not None and per_kg < lo:
-                add("warn", "dose", f"Dose is {per_kg:.2f} mg/kg/day, below the usual {population} range "
-                    f"({lo:g}–{hi:g} mg/kg/day).", evidence)
-                return
+                blocks.append(f"Dose is {per_kg:.1f} mg/kg/day, above the {population} maximum of {hi:g} mg/kg/day.")
+            elif lo is not None and per_kg < lo:
+                warns.append(f"Dose is {per_kg:.2f} mg/kg/day, below the usual {population} range ({lo:g}–{hi:g} mg/kg/day).")
+        # Absolute limits are checked regardless of the weight-based result.
         if rule.get("mg_day_max") is not None and daily > rule["mg_day_max"]:
-            add("block", "dose", f"{daily:g} mg/day exceeds the maximum of {rule['mg_day_max']:g} mg/day.", evidence)
-            return
+            blocks.append(f"{daily:g} mg/day exceeds the maximum of {rule['mg_day_max']:g} mg/day.")
         if rule.get("mg_day_min") is not None and daily < rule["mg_day_min"]:
-            add("warn", "dose", f"{daily:g} mg/day is below the usual minimum of {rule['mg_day_min']:g} mg/day.", evidence)
-            return
-        add("info", "dose", f"Dose is within the {population} range.", evidence)
+            warns.append(f"{daily:g} mg/day is below the usual minimum of {rule['mg_day_min']:g} mg/day.")
+        for msg in blocks:
+            add("block", "dose", msg + " Contact the prescriber.", evidence)
+        for msg in warns:
+            add("warn", "dose", msg, evidence)
+        if not blocks and not warns:
+            add("info", "dose", f"Dose is within the {population} range.", evidence)
 
     def _commercial_check(self, rx, patient, drug, add):
         route = rx.get("route", "oral")
