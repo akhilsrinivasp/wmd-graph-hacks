@@ -6,7 +6,7 @@ Built for [Graph Hacks: Context for AI Agents](https://www.wemakedevs.org/hackat
 
 **Tracks entered:** Agents That Act on Connected Data · Agent Memory and Coordination
 
-**Demo video:** _add link before submitting_ · **Deployment:** runs locally (FalkorDB in Docker + Streamlit); full setup below.
+**Demo video:** [youtu.be/TL8Pyio8XIw](https://youtu.be/TL8Pyio8XIw) · **Deployment:** runs locally (FalkorDB in Docker + Streamlit); full setup below.
 
 > ⚠️ **Demo only — not for clinical use.** The pharmacology data is simplified, every patient is synthetic, and every formulation must be checked by a licensed pharmacist.
 
@@ -284,7 +284,7 @@ tests/                 end-to-end tests against FalkorDB
 | Public source-code repository | This repo |
 | README with setup instructions and graph data model | [Setup](#setup), [Graph data model](#graph-data-model) |
 | Cypher queries the product depends on | [The Cypher the product depends on](#the-cypher-the-product-depends-on), [`compounder/queries.py`](compounder/queries.py) |
-| Demo video | Link at the top of this README |
+| Demo video | [youtu.be/TL8Pyio8XIw](https://youtu.be/TL8Pyio8XIw) |
 | Live deployment or complete local setup | Local setup: [Setup](#setup) |
 | Tracks entered | Agents That Act on Connected Data; Agent Memory and Coordination |
 | Allowed data only | openFDA labels and FDA/CMS/USP documents (public); patients, prescribers and insurance plans are synthetic |
