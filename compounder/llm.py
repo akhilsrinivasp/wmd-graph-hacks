@@ -94,3 +94,23 @@ def summarize(order_facts: dict) -> Brief:
     if resp.stop_reason == "refusal" or resp.parsed_output is None:
         raise RuntimeError("Claude could not summarise this order.")
     return resp.parsed_output
+
+
+class PolicyAnswer(BaseModel):
+    answer: str = Field(description="Direct answer in plain English, 2-5 sentences")
+    cited_sources: list[str] = Field(description="Sources used, copied exactly from the context")
+
+
+def answer_policy(question: str, context: dict) -> PolicyAnswer:
+    resp = _call(
+        model=MODEL,
+        max_tokens=4000,
+        output_config={"effort": "low"},
+        system=("You help pharmacists understand regulations and insurance rules. Answer only from the policy "
+                "excerpts and formulary facts given. If they do not answer the question, say so."),
+        messages=[{"role": "user", "content": json.dumps({"question": question, **context}, default=str)}],
+        output_format=PolicyAnswer,
+    )
+    if resp.stop_reason == "refusal" or resp.parsed_output is None:
+        raise RuntimeError("Claude could not answer this question.")
+    return resp.parsed_output

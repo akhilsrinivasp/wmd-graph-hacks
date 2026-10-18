@@ -129,3 +129,11 @@ def test_structured_record_import():
                   "RETURN a.severity AS s, a.reaction AS r", {"p": out["patient_id"]})
     assert rows == [{"s": "moderate", "r": "hives"}]
     assert process(out["order_id"]) == "AWAITING_REVIEW"
+
+
+def test_policy_graphrag_retrieval():
+    from compounder import policy
+    policy.load()
+    r = policy.retrieve("Why was the amlodipine oral solution claim denied on Acme?")
+    assert "pol_acme_forms" in [c["id"] for c in r["chunks"]]
+    assert any(f["form"] == "Oral solution" and f["status"] == "excluded" for f in r["facts"])

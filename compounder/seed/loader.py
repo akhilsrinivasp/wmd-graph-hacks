@@ -10,7 +10,7 @@ from compounder.seed.openfda import load_snapshot
 
 LABELS = ["Drug", "DrugClass", "Excipient", "ExcipientGroup", "Condition", "DosageForm", "Base",
           "DoseRule", "Product", "Patient", "Prescriber", "Prescription", "Order", "Formulation",
-          "Finding", "AgentStep", "Review", "InsurancePlan", "FormularyEntry", "CoverageDecision"]
+          "Finding", "AgentStep", "Review", "InsurancePlan", "FormularyEntry", "CoverageDecision", "PolicyChunk"]
 
 
 def reset():
@@ -188,6 +188,8 @@ def load_all():
     n = load_products()
     load_insurance()
     load_demo_people()
+    from compounder import policy
+    policy.load()
     return n
 
 

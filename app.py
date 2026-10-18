@@ -59,8 +59,8 @@ with st.sidebar:
     st.caption("Graph browser: [localhost:3000](http://localhost:3000)")
     st.caption("⚠️ Demo only. Not for clinical use. All patients are synthetic.")
 
-tab_queue, tab_intake, tab_new, tab_patients, tab_graph = st.tabs(
-    ["Pharmacist queue", "Patient intake", "Quick order", "Patients", "Knowledge graph"])
+tab_queue, tab_intake, tab_new, tab_rules, tab_patients, tab_graph = st.tabs(
+    ["Pharmacist queue", "Patient intake", "Quick order", "Ask the rules", "Patients", "Knowledge graph"])
 
 
 # --------------------------------------------------------------------------- queue
@@ -335,6 +335,38 @@ with tab_new:
                 st.error(str(e))
     if not llm.available():
         st.caption("Set ANTHROPIC_API_KEY to enable this.")
+
+
+# --------------------------------------------------------------------------- policy GraphRAG
+with tab_rules:
+    from compounder import policy
+    st.markdown("Regulations and plan rules are buried in long documents. Ask in plain English: FalkorDB full-text "
+                "search finds the policy excerpts, the graph adds every excerpt and live formulary fact linked to "
+                "the drugs and plans you mention, and Claude answers with citations.")
+    examples = ["Why was the amlodipine oral solution claim denied on Acme?",
+                "Does Medicare Part D pay for a compounded ketoprofen cream?",
+                "What beyond-use date applies to capsules without a stability study?",
+                "Can we compound a copy of a drug that is commercially available?"]
+    q = st.selectbox("Example questions", examples)
+    q = st.text_input("Question", q)
+    if st.button("Ask", type="primary"):
+        try:
+            res = policy.answer(q)
+        except Exception as e:
+            st.error(str(e))
+            res = policy.retrieve(q) | {"answer": None}
+        if res.get("answer"):
+            st.success(res["answer"].answer)
+            st.caption("Sources: " + "; ".join(res["answer"].cited_sources))
+        elif not llm.available():
+            st.info("Set ANTHROPIC_API_KEY for a written answer. Retrieved context:")
+        if res["facts"]:
+            st.markdown("**Live formulary facts from the graph**")
+            st.dataframe(res["facts"], hide_index=True, use_container_width=True)
+        st.markdown("**Policy excerpts retrieved**")
+        for c in res["chunks"]:
+            link = f" · [source]({c['url']})" if c.get("url") else ""
+            st.markdown(f"> {c['text']}\n>\n> — _{c['source']}_{link}")
 
 
 # --------------------------------------------------------------------------- patients
