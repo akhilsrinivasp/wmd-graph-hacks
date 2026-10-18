@@ -1,6 +1,7 @@
 """Command-line demo.
 
   python cli.py seed        reset the graph and load knowledge + demo orders
+                            (--if-empty: only when the graph is empty)
   python cli.py run         run every pending order through the agents
   python cli.py show ID     print one order's result
   python cli.py export      write an HTML + PDF report per order to docs/samples/
@@ -38,6 +39,9 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
     if cmd == "seed":
         from compounder.seed.loader import load_all
+        if "--if-empty" in sys.argv and db.run("MATCH (n) RETURN count(n) AS n")[0]["n"] > 0:
+            print("Graph already has data; skipping seed.")
+            return
         print(f"Seeded graph ({load_all()} commercial products).")
     elif cmd == "run":
         results = process_pending()

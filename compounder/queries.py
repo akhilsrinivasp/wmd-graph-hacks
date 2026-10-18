@@ -195,7 +195,9 @@ CLEAR_ORDER_RESULTS = """
 MATCH (o:Order {id: $order_id})
 OPTIONAL MATCH (o)-[:HAS_FINDING]->(fd:Finding)
 OPTIONAL MATCH (o)-[:HAS_STEP]->(s:AgentStep)
-DETACH DELETE fd, s
+OPTIONAL MATCH (o)-[:PROPOSED]->(f:Formulation)
+OPTIONAL MATCH (o)-[:COVERAGE]->(c:CoverageDecision)
+DETACH DELETE fd, s, f, c
 """
 
 ORDER_RESULT = """

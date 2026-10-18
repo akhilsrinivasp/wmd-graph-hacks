@@ -16,7 +16,7 @@ services:
       FALKORDB_HOST: falkordb
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     command: >
-      sh -c "python cli.py seed && python cli.py run > /dev/null &&
+      sh -c "python cli.py seed --if-empty && python cli.py run > /dev/null &&
              streamlit run app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true"
 
 volumes:

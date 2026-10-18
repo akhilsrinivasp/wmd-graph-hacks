@@ -63,6 +63,10 @@ def html_report(order_id: str) -> str:
     rep = order_report(order_id)
     p, d, rx, f, doc, cov = (rep["patient"], rep["drug"], rep["rx"], rep["formulation"],
                              rep["prescriber"], rep.get("coverage") or {})
+    if not p:
+        return (f"<!doctype html><html><head><meta charset='utf-8'><title>Order {_e(order_id)}</title></head>"
+                f"<body><p>Order {_e(order_id)} is not resolved yet ({_e(rep['order'].get('status'))}). "
+                "No report is available.</p></body></html>")
     prof = db.run(Q.PATIENT_PROFILE, {"patient_id": p["id"]})[0]
     conditions = [c["name"] for c in prof["conditions"] if c.get("name")]
     dose = f"{rx.get('dose_mg'):g} mg" if rx.get("dose_mg") is not None else f"{rx.get('concentration_pct'):g}%"

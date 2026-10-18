@@ -32,14 +32,23 @@ def build(drug_id: str, drug_name: str, base: dict, plan: dict, rx: dict) -> dic
         unit, strength = SOURCE_UNITS.get(drug_id, ("USP powder", None))
         if strength:
             n = math.ceil(total_mg / strength)
-            source = f"{n} × {drug_name} {strength:g} mg {unit}s ({n * strength:g} mg; {total_mg:g} mg needed)"
+            # Use whole units and scale the batch so the concentration stays exact.
+            total_mg = n * strength
+            batch = round(total_mg / conc, 2)
+            source = f"{n} × {drug_name} {strength:g} mg {unit}s ({total_mg:g} mg)"
+            if batch != vol:
+                vol_note = f" Batch is {batch:g} mL so whole {unit}s give exactly {conc:g} mg/mL; dispense {vol:g} mL."
+            else:
+                vol_note = ""
+            vol = batch
             first = (f"Open the capsules and empty the pellets into the mortar." if "capsule" in unit
                      else "Place the tablets in the mortar and crush to a fine, uniform powder.")
         else:
             source = f"{drug_name} USP powder {total_mg:g} mg"
             first = "Weigh the powder and place it in the mortar."
+            vol_note = ""
         steps = [
-            f"Calculate: {conc:g} mg/mL × {vol:g} mL = {total_mg:g} mg {drug_name}.",
+            f"Calculate: {conc:g} mg/mL × {vol:g} mL = {total_mg:g} mg {drug_name}.{vol_note}",
             f"Gather {source}.",
             first,
             f"Add a small amount of {base['base']} and levigate into a smooth, lump-free paste.",

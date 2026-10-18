@@ -66,6 +66,7 @@ class FormulationAgent(Agent):
         rx, patient, drug = ctx["rx"], ctx["patient"], ctx["drug"]
         route = rx.get("route", "oral")
 
+        db.run("MATCH (o:Order {id: $id})-[:PROPOSED]->(old:Formulation) DETACH DELETE old", {"id": order_id})
         candidates = db.run(Q.CANDIDATE_BASES, {"drug_id": drug["id"], "route": route})
         if not candidates:
             self.finding(order_id, "block", "formulation",

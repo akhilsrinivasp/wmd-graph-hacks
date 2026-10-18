@@ -36,7 +36,19 @@ class CoverageAgent(Agent):
         forms, _ = acceptable_forms(patient["id"], route)
         if not forms:
             forms = [r["id"] for r in db.run("MATCH (f:DosageForm {route: $r}) RETURN f.id AS id", {"r": route})]
-        alts = db.run(Q.THERAPEUTIC_ALTERNATIVES, {"drug_id": drug["id"]})
+        denied = []
+        alts = []
+        for a in db.run(Q.THERAPEUTIC_ALTERNATIVES, {"drug_id": drug["id"]}):
+            params = {"patient_id": patient["id"], "drug_id": a["id"]}
+            problems = [f"allergic to {r['allergy']}" for r in db.run(Q.DRUG_ALLERGY, params)]
+            problems += [f"interacts with {r['other_drug']}" for r in db.run(Q.DRUG_INTERACTIONS, params)
+                         if r["severity"] == "block"]
+            problems += [f"contraindicated in {r['condition']}" for r in db.run(Q.DRUG_CONDITION_CAUTIONS, params)
+                         if r["severity"] == "block"]
+            if problems:
+                denied.append(f"Alternative {a['name']} not suggested: patient {'; '.join(problems)}.")
+            else:
+                alts.append(a)
         drug_ids = [drug["id"], *[a["id"] for a in alts]]
         meds = [r["id"] for r in db.run("MATCH (:Patient {id: $p})-[:TAKES]->(d:Drug) RETURN d.id AS id",
                                         {"p": patient["id"]})]
@@ -48,7 +60,7 @@ class CoverageAgent(Agent):
                 products.append({**p, "drug_id": did})
         conflicts = conflicts_for([p["product_id"] for p in products], patient["id"], [*drug_ids, *meds])
 
-        options, denied = [], []
+        options = []
         for e in entries:
             prods = [p for p in products if p["drug_id"] == e["drug_id"] and p["form"] == e["form"]]
             safe = [p for p in prods if not any(c["severity"] == "block" for c in conflicts[p["product_id"]])]
@@ -89,7 +101,8 @@ class CoverageAgent(Agent):
                          denied[:5])
         else:
             best = options[0]
-            decision = self._decide(best, rx, patient, drug, doc, plan, member_id, denied, formulation)
+            decision = self._decide(best, rx, patient, drug, doc, plan, member_id, denied, formulation,
+                                    [o for o in options if o["kind"] == "commercial"])
             msg = f"Best covered option on {plan['name']}: {best['label']} at {_money(best['copay'])} copay" + \
                   (" (prior auth needed)." if best["pa"] else ", no prior auth.")
             self.finding(order_id, "warn" if best["kind"] != "compound" else "info", "coverage", msg, denied[:5])
@@ -109,7 +122,7 @@ class CoverageAgent(Agent):
         self.set_status(order_id, self.next_status)
 
     @staticmethod
-    def _decide(best, rx, patient, drug, doc, plan, member_id, denied, formulation) -> dict:
+    def _decide(best, rx, patient, drug, doc, plan, member_id, denied, formulation, commercial) -> dict:
         dose = (f"{rx['dose_mg']:g} mg" if rx.get("dose_mg") is not None else f"{rx.get('concentration_pct'):g}%")
         freq = rx.get("frequency_per_day")
         who = f"{patient['name']} (member ID {member_id}, {plan['name']})"
@@ -122,8 +135,14 @@ class CoverageAgent(Agent):
                     f"Prior authorization request: compounded {formulation['drug']} {formulation['concentration']} "
                     f"{formulation['form'].lower()} for {who}.\n"
                     f"Prescribed by {doctor}: {drug['name']} {dose}, {freq}x/day.\n"
-                    f"Medical necessity: no covered commercial product is suitable for this patient:{denied_txt or ' none found.'}\n"
-                    f"Plan rule: {plan.get('compound_rule', '')}")
+                    + (f"Medical necessity: no covered commercial product is suitable for this patient:{denied_txt or ' none found.'}\n"
+                       if not commercial else
+                       f"Not covered or unsuitable:{denied_txt or ' none.'}\n"
+                       "Covered commercial alternatives that are suitable: "
+                       + "; ".join(f"{o['label']} ({', '.join(o['products'])}) at {_money(o['copay'])} copay"
+                                   f"{' with prior auth' if o['pa'] else ''}" for o in commercial)
+                       + f". The compound is requested as the lower-cost option ({_money(best['copay'])} copay).\n")
+                    + f"Plan rule: {plan.get('compound_rule', '')}")
             return {"route": "compound", "recommended": best["label"], "copay_usd": best["copay"],
                     "prior_auth": best["pa"], "pa_request": pa_request,
                     "prescriber_message": f"{doctor}: no change needed for {patient['name']}. We will prepare "

@@ -32,6 +32,8 @@ class IntakeAgent(Agent):
         if missing:
             self.finding(order_id, "block", "intake", f"Prescription is missing: {', '.join(missing)}.",
                          about_ids=[rx["id"]])
+            self.set_status(order_id, "NEEDS_ATTENTION")
+            return
 
         dose = (f"{rx['dose_mg']} mg" if rx.get("dose_mg") is not None
                 else f"{rx.get('concentration_pct')}%")

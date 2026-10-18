@@ -137,3 +137,30 @@ def test_policy_graphrag_retrieval():
     r = policy.retrieve("Why was the amlodipine oral solution claim denied on Acme?")
     assert "pol_acme_forms" in [c["id"] for c in r["chunks"]]
     assert any(f["form"] == "Oral solution" and f["status"] == "excluded" for f in r["facts"])
+
+
+def test_review_fixes():
+    from compounder.export import html_report
+    from compounder.seed.loader import add_prescription, create_order
+    # Missing dose stops at intake instead of crashing later
+    add_prescription({"id": "rx_nodose", "patient": "pt_maya", "prescriber": "dr_okafor", "drug": "amlodipine",
+                      "route": "oral", "frequency_per_day": 1, "duration_days": 30})
+    oid = create_order("rx_nodose")
+    assert process(oid) == "NEEDS_ATTENTION"
+    # Unresolved free-text order renders a placeholder report
+    db.run("CREATE (:Order {id: 'ord_unresolved', status: 'NEEDS_ATTENTION', source: 'free text', created_at: 0})")
+    assert "not resolved" in html_report("ord_unresolved")
+    # Procedure keeps the exact concentration (Leo: 13 x 20 mg capsules -> 130 mL at 2 mg/mL)
+    f = run_rx("rx_1002")["formulation"]
+    assert any("2 mg/mL × 130 mL = 260 mg" in s for s in f["procedure"])
+    # Ethan's PA request names the suitable covered solution instead of claiming none exists
+    pa = run_rx("rx_1007")["coverage"]["pa_request"]
+    assert "Covered commercial alternatives that are suitable" in pa and "Medical necessity: no covered" not in pa
+    # Alternative drug is screened: diclofenac allergy blocks the diclofenac suggestion
+    db.run("MATCH (p:Patient {id: 'pt_daniel'}), (d:Drug {id: 'diclofenac'}) MERGE (p)-[:ALLERGIC_TO]->(d)")
+    cov = run_rx("rx_1005")["coverage"]
+    assert cov["route"] != "alternative" and any("Diclofenac not suggested" in d for d in cov["denied"])
+    db.run("MATCH (:Patient {id: 'pt_daniel'})-[r:ALLERGIC_TO]->(:Drug {id: 'diclofenac'}) DELETE r")
+    # Restart clears a stale formulation when the only base becomes unusable
+    db.run(Q.REPORT_REACTION, {"patient_id": "pt_leo", "excipient_id": "sodium_bicarbonate", "note": "", "at": 0})
+    assert not run_rx("rx_1002")["formulation"]
