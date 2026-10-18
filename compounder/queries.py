@@ -252,3 +252,39 @@ WITH p, e
 OPTIONAL MATCH (p)-[t:TOLERATED]->(b:Base)-[:CONTAINS]->(e)
 DELETE t
 """
+
+# --- Insurance coverage -----------------------------------------------------
+
+PATIENT_PLAN = """
+MATCH (p:Patient {id: $patient_id})-[ib:INSURED_BY]->(pl:InsurancePlan)
+RETURN pl, ib.member_id AS member_id
+"""
+
+# Formulary entries for the prescribed drug (and covered alternatives), by form.
+COVERAGE_ENTRIES = """
+MATCH (:Patient {id: $patient_id})-[:INSURED_BY]->(pl:InsurancePlan)-[:LISTS]->(fe:FormularyEntry)-[:FOR_DRUG]->(d:Drug)
+WHERE d.id IN $drug_ids
+MATCH (fe)-[:IN_FORM]->(f:DosageForm)
+WHERE f.id IN $form_ids
+RETURN d.id AS drug_id, d.name AS drug, f.id AS form_id, f.name AS form, fe.status AS status,
+       fe.tier AS tier, fe.copay_usd AS copay, fe.prior_auth AS prior_auth, fe.note AS note
+"""
+
+THERAPEUTIC_ALTERNATIVES = """
+MATCH (d:Drug {id: $drug_id})-[a:ALTERNATIVE_TO]-(alt:Drug)
+RETURN alt.id AS id, alt.name AS name, a.note AS note
+"""
+
+WRITE_COVERAGE = """
+MATCH (o:Order {id: $order_id}) MATCH (pl:InsurancePlan {id: $plan_id})
+OPTIONAL MATCH (o)-[:COVERAGE]->(old:CoverageDecision)
+DETACH DELETE old
+WITH o, pl
+CREATE (c:CoverageDecision) SET c = $props
+CREATE (o)-[:COVERAGE]->(c) CREATE (c)-[:UNDER_PLAN]->(pl)
+"""
+
+ORDER_COVERAGE = """
+MATCH (:Order {id: $order_id})-[:COVERAGE]->(c:CoverageDecision)-[:UNDER_PLAN]->(pl:InsurancePlan)
+RETURN c, pl.name AS plan
+"""

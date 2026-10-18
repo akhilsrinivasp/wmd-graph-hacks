@@ -6,12 +6,13 @@ workers polling the graph.
 """
 from compounder import db
 from compounder import queries as Q
+from compounder.agents.coverage import CoverageAgent
 from compounder.agents.formulation import FormulationAgent
 from compounder.agents.history import HistoryAgent
 from compounder.agents.intake import IntakeAgent
 from compounder.agents.safety import SafetyAgent
 
-AGENTS = [IntakeAgent(), HistoryAgent(), FormulationAgent(), SafetyAgent()]
+AGENTS = [IntakeAgent(), HistoryAgent(), FormulationAgent(), SafetyAgent(), CoverageAgent()]
 BY_STATUS = {a.handles_status: a for a in AGENTS}
 
 

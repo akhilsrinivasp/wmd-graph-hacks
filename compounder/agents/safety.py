@@ -14,7 +14,7 @@ from compounder.agents.formulation import acceptable_forms, conflicts_for
 class SafetyAgent(Agent):
     name = "Safety"
     handles_status = "FORMULATED"
-    next_status = "AWAITING_REVIEW"
+    next_status = "SAFETY_CHECKED"
 
     def run(self, order_id: str) -> None:
         ctx = self.context(order_id)

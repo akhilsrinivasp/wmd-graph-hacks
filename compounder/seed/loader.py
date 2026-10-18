@@ -4,12 +4,13 @@ Usage:  python -m compounder.seed.loader            (reset + load everything)
 """
 from compounder import db
 from compounder.seed import demo_patients as demo
+from compounder.seed import insurance as ins
 from compounder.seed import knowledge as kb
 from compounder.seed.openfda import load_snapshot
 
 LABELS = ["Drug", "DrugClass", "Excipient", "ExcipientGroup", "Condition", "DosageForm", "Base",
           "DoseRule", "Product", "Patient", "Prescriber", "Prescription", "Order", "Formulation",
-          "Finding", "AgentStep", "Review"]
+          "Finding", "AgentStep", "Review", "InsurancePlan", "FormularyEntry", "CoverageDecision"]
 
 
 def reset():
@@ -105,9 +106,28 @@ def load_products():
     return len(rows)
 
 
+def load_insurance():
+    db.run("UNWIND $rows AS r CREATE (p:InsurancePlan) SET p = r", {"rows": ins.PLANS})
+    rows = [{"id": f"fe_{plan}_{drug}_{form}", "plan": plan, "drug": drug, "form": form,
+             "props": {"status": status, "tier": tier, "copay_usd": copay, "prior_auth": pa, "note": note}}
+            for plan, drug, form, status, tier, copay, pa, note in ins.FORMULARY]
+    db.run(
+        """UNWIND $rows AS r
+        MATCH (pl:InsurancePlan {id: r.plan}) MATCH (d:Drug {id: r.drug}) MATCH (f:DosageForm {id: r.form})
+        CREATE (fe:FormularyEntry {id: r.id}) SET fe += r.props
+        CREATE (pl)-[:LISTS]->(fe) CREATE (fe)-[:FOR_DRUG]->(d) CREATE (fe)-[:IN_FORM]->(f)""",
+        {"rows": rows},
+    )
+    _link_by_id([{"src": a, "dst": b, "props": {"note": n}} for a, b, n in ins.THERAPEUTIC_ALTERNATIVES],
+                "ALTERNATIVE_TO")
+
+
 def load_demo_people():
     db.run("UNWIND $rows AS r CREATE (p:Prescriber) SET p = r", {"rows": demo.PRESCRIBERS})
     for p in demo.PATIENTS:
+        plan = ins.PATIENT_PLANS.get(p["id"])
+        if plan and "insurance" not in p:
+            p = {**p, "insurance": {"plan_id": plan[0], "member_id": plan[1]}}
         add_patient(p)
     for rx in demo.PRESCRIPTIONS:
         add_prescription(rx)
@@ -118,11 +138,23 @@ def add_patient(p: dict):
     db.run("""CREATE (:Patient {id: $id, name: $name, age_years: $age, weight_kg: $wt, sex: $sex, story: $story})""",
            {"id": p["id"], "name": p["name"], "age": float(p["age_years"]), "wt": float(p["weight_kg"]),
             "sex": p.get("sex", ""), "story": p.get("story", "")})
-    links = [{"src": p["id"], "dst": c, "props": {"derived": False}} for c in p.get("conditions", [])]
-    _link_by_id(links, "HAS_CONDITION")
-    _link_by_id([{"src": p["id"], "dst": a, "props": {}} for a in p.get("allergies", [])], "ALLERGIC_TO")
+    # Conditions and allergies may be plain ids or dicts with details
+    # (e.g. {"id": "azo_dye", "reaction": "hives", "severity": "moderate"}).
+    def rows(items, defaults):
+        out = []
+        for it in items:
+            it = {"id": it} if isinstance(it, str) else dict(it)
+            props = {**defaults, **{k: v for k, v in it.items() if k != "id" and v not in (None, "")}}
+            out.append({"src": p["id"], "dst": it["id"], "props": props})
+        return out
+    _link_by_id(rows(p.get("conditions", []), {"derived": False}), "HAS_CONDITION")
+    _link_by_id(rows(p.get("allergies", []), {}), "ALLERGIC_TO")
     _link_by_id([{"src": p["id"], "dst": a, "props": {}} for a in p.get("avoids", [])], "AVOIDS")
-    _link_by_id([{"src": p["id"], "dst": d, "props": {}} for d in p.get("takes", [])], "TAKES")
+    _link_by_id(rows(p.get("takes", []), {}), "TAKES")
+    plan = p.get("insurance") or {}
+    if plan.get("plan_id"):
+        _link_by_id([{"src": p["id"], "dst": plan["plan_id"], "props": {"member_id": plan.get("member_id", "")}}],
+                    "INSURED_BY")
 
 
 def add_prescription(rx: dict):
@@ -154,6 +186,7 @@ def load_all():
     reset()
     load_knowledge()
     n = load_products()
+    load_insurance()
     load_demo_people()
     return n
 
