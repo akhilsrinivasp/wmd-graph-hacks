@@ -94,3 +94,38 @@ def test_approval_and_reaction_are_remembered():
     db.run(Q.REPORT_REACTION, {"patient_id": "pt_maya", "excipient_id": "methylparaben", "note": "rash", "at": 0})
     rep2 = run_rx("rx_1001")
     assert "paraben-free" in rep2["formulation"]["base"]
+
+
+def test_coverage_prefers_covered_form_and_drafts_prescriber_message():
+    rep = run_rx("rx_1001")  # Maya on Acme PPO: oral solution denied, suspension covered
+    cov = rep["coverage"]
+    assert cov["route"] == "commercial" and "suspension" in cov["recommended"]
+    assert cov["copay_usd"] == 15 and not cov["prior_auth"]
+    assert any("oral solution: not covered" in d for d in cov["denied"])
+    assert "new prescription" in cov["prescriber_message"]
+
+
+def test_coverage_suggests_covered_alternative_and_pa_for_compound():
+    daniel = run_rx("rx_1005")["coverage"]  # ketoprofen compound needs PA; diclofenac gel covered
+    assert daniel["route"] == "alternative" and "Diclofenac" in daniel["recommended"]
+    ethan = run_rx("rx_1007")["coverage"]  # all covered tablets contain dyes -> compound with PA request
+    assert ethan["route"] == "compound" and ethan["prior_auth"]
+    assert "dye" in ethan["pa_request"].lower()
+
+
+def test_procedure_has_computed_quantities():
+    f = run_rx("rx_1001")["formulation"]
+    assert any("10 × Amlodipine 5 mg tablets" in s for s in f["procedure"])
+    assert any("50 mL" in s for s in f["procedure"])
+
+
+def test_structured_record_import():
+    import json
+    from compounder.intake_schema import PatientRecord, import_record
+    rec = PatientRecord(**json.load(open("data/sample_patient.json")))
+    out = import_record(rec)
+    assert out["order_id"] and not out["unmatched"]
+    rows = db.run("MATCH (:Patient {id: $p})-[a:ALLERGIC_TO]->(:ExcipientGroup {id: 'azo_dye'}) "
+                  "RETURN a.severity AS s, a.reaction AS r", {"p": out["patient_id"]})
+    assert rows == [{"s": "moderate", "r": "hives"}]
+    assert process(out["order_id"]) == "AWAITING_REVIEW"

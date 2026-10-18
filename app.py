@@ -4,7 +4,10 @@ import uuid
 
 import streamlit as st
 
+import json
+
 from compounder import db, llm
+from compounder.intake_schema import PatientRecord, import_record
 from compounder import queries as Q
 from compounder.agents.base import props
 from compounder.agents.orchestrator import process, process_pending
@@ -56,8 +59,8 @@ with st.sidebar:
     st.caption("Graph browser: [localhost:3000](http://localhost:3000)")
     st.caption("⚠️ Demo only. Not for clinical use. All patients are synthetic.")
 
-tab_queue, tab_new, tab_patients, tab_graph = st.tabs(
-    ["Pharmacist queue", "New order", "Patients", "Knowledge graph"])
+tab_queue, tab_intake, tab_new, tab_patients, tab_graph = st.tabs(
+    ["Pharmacist queue", "Patient intake", "Quick order", "Patients", "Knowledge graph"])
 
 
 # --------------------------------------------------------------------------- queue
@@ -92,6 +95,37 @@ def render_order(order_id: str):
                     st.write("No other candidate bases.")
         else:
             st.warning("No formulation proposed.")
+
+        cov = rep.get("coverage")
+        if cov:
+            st.markdown("#### Insurance coverage")
+            st.caption(f"{cov['plan']} · member {cov.get('member_id', '')} · synthetic demo plan")
+            if cov.get("route") != "none":
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Recommended", {"compound": "Compound", "commercial": "Commercial",
+                                          "alternative": "Alternative"}.get(cov["route"], cov["route"]))
+                c2.metric("Patient copay", f"${cov['copay_usd']:g}" if cov.get("copay_usd") is not None else "?")
+                c3.metric("Prior auth", "Needed" if cov.get("prior_auth") else "Not needed")
+                st.markdown(f"**{cov['recommended']}**")
+            for o in cov.get("options") or []:
+                st.markdown(f"- ✅ {o}")
+            for d_ in cov.get("denied") or []:
+                st.markdown(f"- ⛔ {d_}")
+            if cov.get("prescriber_message"):
+                with st.expander("Message to prescriber (ready to send)", expanded=True):
+                    st.code(cov["prescriber_message"], language=None, wrap_lines=True)
+            if cov.get("pa_request"):
+                with st.expander("Prior authorization request (ready to submit)"):
+                    st.code(cov["pa_request"], language=None, wrap_lines=True)
+
+        if f and f.get("procedure"):
+            with st.expander("Compounding procedure (master formulation record)", expanded=False):
+                st.markdown("**Ingredients**\n" + "\n".join(f"- {x}" for x in f.get("ingredients") or []))
+                st.markdown("**Equipment**: " + ", ".join(f.get("equipment") or []))
+                st.markdown("**Steps**\n" + "\n".join(f"{i}. {x}" for i, x in enumerate(f["procedure"], 1)))
+                st.markdown("**Quality checks**\n" + "\n".join(f"- [ ] {x}" for x in f.get("qc") or []))
+                st.markdown("**Label**\n" + "\n".join(f"- {x}" for x in f.get("label_text") or []))
+                st.caption("Demo only. A licensed pharmacist must verify every step.")
 
         st.markdown("#### Safety findings")
         if not rep["findings"]:
@@ -171,6 +205,90 @@ with tab_queue:
         sel = st.selectbox("Open order", list(labels), format_func=labels.get)
         st.divider()
         render_order(sel)
+
+
+# --------------------------------------------------------------------------- patient intake
+def _run_import(rec: PatientRecord):
+    res = import_record(rec)
+    if res["unmatched"]:
+        st.warning("Not found in the knowledge graph (skipped): " + ", ".join(res["unmatched"]))
+    if res["order_id"]:
+        with st.spinner("Agents working..."):
+            status = process(res["order_id"])
+        st.success(f"Patient {rec.name} added and order {res['order_id']} processed "
+                   f"({STATUS_LABEL.get(status, status)}). Open it in the Pharmacist queue.")
+    else:
+        st.success(f"Patient {rec.name} added.")
+
+
+with tab_intake:
+    st.markdown("Patient data enters the graph as a validated, structured record. Every name is matched to a graph "
+                "node; allergy reaction and severity are stored on the `ALLERGIC_TO` relationship.")
+    mode = st.radio("Input", ["Form", "JSON import"], horizontal=True)
+    plans = db.run("MATCH (p:InsurancePlan) RETURN p.id AS id, p.name AS name ORDER BY name")
+    docs = db.run("MATCH (d:Prescriber) RETURN d.name AS name ORDER BY name")
+    drug_names = [r["name"] for r in db.run("MATCH (d:Drug) RETURN d.name AS name ORDER BY name")]
+    if mode == "JSON import":
+        sample = open("data/sample_patient.json").read()
+        raw = st.text_area("Patient record (JSON)", sample, height=420)
+        if st.button("Validate and import", type="primary"):
+            try:
+                _run_import(PatientRecord(**json.loads(raw)))
+            except Exception as e:
+                st.error(f"Invalid record: {e}")
+        with st.expander("Record schema"):
+            st.json(PatientRecord.model_json_schema())
+    else:
+        with st.form("intake_form"):
+            st.markdown("**Patient**")
+            c1, c2, c3, c4 = st.columns(4)
+            name = c1.text_input("Name", "Jordan Lee")
+            age = c2.number_input("Age (years)", 0.0, 120.0, 5.0)
+            wt = c3.number_input("Weight (kg)", 1.0, 300.0, 18.0)
+            sex = c4.selectbox("Sex", ["F", "M", "X"])
+            st.markdown("**Allergies** (one per row: substance, reaction, severity)")
+            allergy_rows = st.data_editor([{"substance": "azo dye", "reaction": "hives", "severity": "moderate"}],
+                                          num_rows="dynamic", key="allergy_rows", use_container_width=True,
+                                          column_config={"severity": st.column_config.SelectboxColumn(
+                                              options=["mild", "moderate", "severe", "unknown"])})
+            st.markdown("**Medical history**")
+            history_rows = st.data_editor([{"condition": "Hypertension", "since": "2025", "notes": ""}],
+                                          num_rows="dynamic", key="history_rows", use_container_width=True)
+            st.markdown("**Current medications**")
+            med_rows = st.data_editor([{"drug": "", "dose": ""}], num_rows="dynamic", key="med_rows",
+                                      use_container_width=True)
+            diet = st.multiselect("Dietary restrictions", ["Animal-derived", "Gluten source", "Soy-derived",
+                                                           "Peanut-derived", "Alcohol (solvent)"])
+            st.markdown("**Insurance**")
+            c1, c2 = st.columns(2)
+            plan = c1.selectbox("Plan", plans, format_func=lambda r: r["name"])
+            member = c2.text_input("Member ID", "ACM-000-01")
+            st.markdown("**Doctor's prescription**")
+            c1, c2, c3 = st.columns(3)
+            doc = c1.selectbox("Prescriber", [d["name"] for d in docs])
+            drug = c2.selectbox("Drug", drug_names, index=drug_names.index("Amlodipine") if "Amlodipine" in drug_names else 0)
+            route = c3.selectbox("Route", ["oral", "topical"])
+            c1, c2, c3 = st.columns(3)
+            strength = c1.number_input("Dose (mg) or strength (%)", 0.0, 5000.0, 1.0)
+            freq = c2.number_input("Times per day", 1, 6, 1)
+            days = c3.number_input("Days", 1, 365, 30)
+            notes = st.text_input("Doctor's notes", "Cannot swallow tablets.")
+            if st.form_submit_button("Save patient and run agents", type="primary"):
+                try:
+                    rec = PatientRecord(
+                        name=name, age_years=age, weight_kg=wt, sex=sex,
+                        allergies=[a for a in allergy_rows if a.get("substance")],
+                        history=[h for h in history_rows if h.get("condition")],
+                        medications=[m for m in med_rows if m.get("drug")],
+                        dietary_restrictions=diet,
+                        insurance={"plan": plan["id"], "member_id": member} if plan else None,
+                        prescription={"prescriber": doc, "drug": drug, "route": route,
+                                      "dose_mg": strength if route == "oral" else None,
+                                      "concentration_pct": strength if route == "topical" else None,
+                                      "frequency_per_day": int(freq), "duration_days": int(days), "notes": notes})
+                    _run_import(rec)
+                except Exception as e:
+                    st.error(f"Invalid record: {e}")
 
 
 # --------------------------------------------------------------------------- new order

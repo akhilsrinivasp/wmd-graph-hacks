@@ -1,0 +1,26 @@
+{
+  "name": "Nora Patel",
+  "age_years": 3,
+  "weight_kg": 14,
+  "sex": "F",
+  "allergies": [
+    {"substance": "azo dye", "reaction": "hives", "severity": "moderate"},
+    {"substance": "penicillin", "reaction": "rash", "severity": "mild"}
+  ],
+  "history": [
+    {"condition": "Hypertension", "since": "2025", "notes": "Secondary to renal artery stenosis"},
+    {"condition": "Hereditary fructose intolerance", "since": "birth", "notes": ""}
+  ],
+  "medications": [],
+  "dietary_restrictions": [],
+  "insurance": {"plan": "Acme Health PPO", "member_id": "ACM-300-14"},
+  "prescription": {
+    "prescriber": "Okafor",
+    "drug": "amlodipine",
+    "route": "oral",
+    "dose_mg": 1.25,
+    "frequency_per_day": 1,
+    "duration_days": 30,
+    "notes": "Cannot swallow tablets."
+  }
+}
